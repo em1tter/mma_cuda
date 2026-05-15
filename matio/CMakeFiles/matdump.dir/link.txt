@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/matdump.dir/tools/matdump.c.o CMakeFiles/matdump.dir/snprintf/snprintf.c.o -o matdump  -Wl,-rpath,/mnt/A6A00642A0061A07/G-Drive/2025/cvut/elmag/zkouska/mma/matio:/usr/lib/x86_64-linux-gnu/hdf5/serial: libmatio.so.1.5.28 -lm /usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so /usr/lib/x86_64-linux-gnu/libz.so

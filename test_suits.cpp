@@ -3,7 +3,8 @@
 #include "mmaOpt.h"
 #include "Eigen/Eigen"
 #include "matlab_utils.h"
-
+#include <matio.h>
+#include <stdexcept>
 
 /*This script is the "beam problem" from the MMA paper of Krister Svanberg.
 **
@@ -11,6 +12,53 @@
 **subject to 61 / (x(1) ^ 3) + 37 / (x(2) ^ 3) + 19 / (x(3) ^ 3) + 7 / (x(4) ^ 3) + 1 / (x(5) ^ 3) = < 1,
 **	1 = < x(j) = < 10, for j = 1, .., 5.
 */
+
+
+Eigen::MatrixXd loadMatrixFromFile(const std::string &varname, const std::string &filename) {
+    mat_t *matfp = Mat_Open(filename.c_str(), MAT_ACC_RDONLY);
+    if (!matfp) {
+        throw std::runtime_error("Unable to open MAT file: " + filename);
+    }
+
+    matvar_t *matvar = Mat_VarRead(matfp, varname.c_str());
+    if (!matvar) {
+        Mat_Close(matfp);
+        throw std::runtime_error("Variable " + varname + " not found in file " + filename);
+    }
+
+    if (matvar->data_type != MAT_T_DOUBLE) {
+        Mat_VarFree(matvar);
+        Mat_Close(matfp);
+        throw std::runtime_error("Variable is not of type double");
+    }
+
+    if (matvar->rank != 2) {
+        Mat_VarFree(matvar);
+        Mat_Close(matfp);
+        throw std::runtime_error("Variable is not 2D matrix");
+    }
+
+    size_t rows = matvar->dims[0];
+    size_t cols = matvar->dims[1];
+
+    double *data = static_cast<double*>(matvar->data);
+    if (!data) {
+        Mat_VarFree(matvar);
+        Mat_Close(matfp);
+        throw std::runtime_error("Data pointer is null");
+    }
+
+    // MATLAB stores matrices in column-major order, Eigen also uses column-major by default
+    Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>> mat(data, rows, cols);
+
+    Eigen::MatrixXd result = mat;  // Copy data into a new matrix
+
+    Mat_VarFree(matvar);
+    Mat_Close(matfp);
+
+    return result;
+}
+
 std::tuple<double, std::vector<double>, std::vector<double>, std::vector<double>> beam2(const std::vector<double>& xval) {
 	double f0 = 0;
 	std::vector<double> dfdx;
@@ -84,7 +132,7 @@ std::tuple<double, std::vector<double>, std::vector<double>, std::vector<double>
 	Eigen::Matrix<double, -1, 1> x(n, 1);
 	std::copy(xval.begin(), xval.end(), x.data());
 	double f0val = w.dot(x);
-	std::vector<double> df0(w.begin(), w.end());
+	std::vector<double> df0(w.data(), w.data() + w.size());
 	
 	std::vector<Eigen::Matrix<double, -1, 1>> sample_centers(m);
 	for (int i = 0; i < sample_centers.size(); i++) {
@@ -167,11 +215,11 @@ void test_mma(void) {
 	else if (1) {
 		Eigen::Matrix<double, -1, -1> weightvector = loadMatrixFromFile(
 			"weightvector",
-			"../data/problem2.mat"
+			"data/problem2.mat"
 		);
 		Eigen::Matrix<double, -1, -1> centers = loadMatrixFromFile(
 			"centers",
-			"../data/problem2.mat"
+			"data/problem2.mat"
 		);
 		//Eigen::Matrix<double, -1, -1> nstep = loadMatrixFromFile(
 		//	"nstep",

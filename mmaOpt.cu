@@ -12,7 +12,7 @@
 #include "lib.cuh"
 #include <tuple>
 
-//#define DEBUG_MMA_OPT
+#define DEBUG_MMA_OPT
 
 //std::vector<int> nlineSearchStep;
 //int lsindex = 0;
@@ -102,7 +102,7 @@ void matrix_AAt_rowmajor(const Scalar* pdata, int nwordvalid, int nwordpitch, in
 	int nbatch = gv::round<BatchSize>(npitch) / BatchSize;
 
 	int nblock = nblockStride /** nbatch*/;
-	
+
 	size_t ndstpitch;
 	Scalar* tmp_data;
 	cudaMallocPitch(&tmp_data, &ndstpitch, nblockStride * sizeof(Scalar), npitch * npitch);
@@ -123,7 +123,7 @@ void matrix_AAt_rowmajor(const Scalar* pdata, int nwordvalid, int nwordpitch, in
 		int col = eid % npitch;
 		int k = col + row * ndstwordpitch;
 		dst[k] = tmp_data[(col + row * npitch) * (ndstpitch / sizeof(Scalar))];
-	};	
+	};
 	parallel_do(npitch * npitch, 512, gather);
 }
 
@@ -186,7 +186,7 @@ void update_pqlambda_gvec(
 	};
 	parallel_do(nvar, 512, kernel);
 	// update gvector
-	//gmat.set(0.);// delete here 
+	//gmat.set(0.);// delete here
 	gmat = P * uxinv1.dup(nconstrain, nvar, Pwordpitch) + Q * xlinv1.dup(nconstrain, nvar, Qwordpitch);
 	gmat.pitchSumInPlace(4, nvar, Pwordpitch);
 	gmat.gatherPitch(gvec.data(), 1, nconstrain, Pwordpitch, 1);
@@ -217,7 +217,7 @@ mma_arg_pack subsolv_g(int nconstrain, int nvar, double epsimin,
 
 	double z = 1; // 1
 	//double y = 1; // m
-	
+
 	gVector lam(nconstrain);
 	lam.set(1);
 	gVector y(nconstrain);
@@ -296,10 +296,11 @@ mma_arg_pack subsolv_g(int nconstrain, int nvar, double epsimin,
 		uxinv1 = 1. / ux1;
 		xlinv1 = 1. / xl1;
 
-		std::cout << "-- epsi = " << epsi;
-		
+		//std::cout << "-- epsi = " << epsi;
+
 		cuda_error_check;
 		// update plambda, qlambda, gvec
+
 		update_pqlambda_gvec(nconstrain, nvar, uxinv1, xlinv1, p0, q0, P, Q, lam, plam, qlam, gmat, gvec);
 
 #ifdef DEBUG_MMA_OPT
@@ -410,7 +411,7 @@ mma_arg_pack subsolv_g(int nconstrain, int nvar, double epsimin,
 			blam = dellam + dely / diagy - GGxx;
 			bb = blam.concat(delz);
 			//std::cout << "-- log " << __LINE__ << std::endl;
-			
+
 			//diagx.toMatlab("diagx");
 			//GG.toMatlab("gg");
 			//bb.toMatlab("bb");
@@ -433,7 +434,7 @@ mma_arg_pack subsolv_g(int nconstrain, int nvar, double epsimin,
 				auto add_diag_kernel = [=] __device__(int eid) {
 					Alam_data[eid + eid * nconstrain] += diaglamyi.eval(eid);
 					return;
-				};	
+				};
 				parallel_do(nconstrain, 512, add_diag_kernel);
 
 				//std::cout << "-- log " << __LINE__ << std::endl;
@@ -533,7 +534,7 @@ mma_arg_pack subsolv_g(int nconstrain, int nvar, double epsimin,
 				//gvec.toMatlab("gvec");
 //#endif
 				dpsidx = plam / (ux1 * ux1) - qlam / (xl1 * xl1);
-				
+
 				rex = dpsidx - xsi + eta;
 				rey = c + d * y - mu - lam;
 				rez = a0 - zet - a.dot(lam);
@@ -563,7 +564,7 @@ mma_arg_pack subsolv_g(int nconstrain, int nvar, double epsimin,
 			}
 
 			//if (mma_iter == 1 && (itto >= 50 || itto != nlineSearchStep[lsindex])) {
-			//	printf("line search failed\n"); 
+			//	printf("line search failed\n");
 			//	std::cout << "-- ittt = " << ittt << ", " << "residunorm = " << residunorm << std::endl;
 			//	std::cout << "-- step " << steg << ", initial step = " << 1. / stminv << std::endl;
 			//	xold.toMatlab("xold");
@@ -594,12 +595,10 @@ mma_arg_pack subsolv_g(int nconstrain, int nvar, double epsimin,
 			steg = 2 * steg;
 		}
 
-		std::cout << " ittt = " << ittt << std::endl;
+		//std::cout << " ittt = " << ittt << std::endl;
 
 		epsi = 0.1 * epsi;
 	}
-
-	//lsindex = 0;
 
 	return std::make_tuple(
 		std::move(x), std::move(y), std::move(z),
@@ -613,58 +612,26 @@ void mmasub_g(int nconstrain, int nvar,
 	double* low, double* upp,
 	double a0, double* a, double* c, double* d,
 	double move
-) 
+)
 {
-	//mma_iter = itn;
-	gv::gVector<double>::Init();
-	// output input parameters
-	//std::cout << "f0val = " << f0val << std::endl;
-	//std::cout << "df0dx = ";
-	//for (int i = 0; i < nvar; i++) { std::cout << df0dx[i]; }
-	//std::cout << std::endl;
-	//for (int j = 0; j < nconstrain; j++) {
-	//	std::cout << "g" << j << " = " << gval[j] << ";  dg" << j << "dx = ";
-	//	for (int i = 0; i < nvar; i++) {
-	//		std::cout << dgdx[i + j * nvar] << "  ";
-	//	}
-	//	std::cout << std::endl;
-	//}
 
 	typedef gv::gVector<double> gVector;
-	// transfer data from host to device
-	gVector xvar_g(nvar);
-	xvar_g.set(xvar);
 
-	gVector xmin_g(nvar), xmax_g(nvar);
-	xmin_g.set(xmin);
-	xmax_g.set(xmax);
-
-	gVector xold1_g(nvar), xold2_g(nvar);
-	xold1_g.set(xold1);
-	xold2_g.set(xold2);
-
-	gVector df0dx_g(nvar);
-	df0dx_g.set(df0dx);
-
-	gVector gval_g(nconstrain);
-	gval_g.set(gval);
+	gVector xvar_g(gv::gVectorMap<double>(xvar, nvar));
+	gVector xmin_g(gv::gVectorMap<double>(xmin, nvar)), xmax_g(gv::gVectorMap<double>(xmax, nvar));
+	gVector xold1_g(gv::gVectorMap<double>(xold1, nvar)), xold2_g(gv::gVectorMap<double>(xold2, nvar));
+	gVector df0dx_g(gv::gVectorMap<double>(df0dx, nvar));
+	gVector gval_g(gv::gVectorMap<double>(gval, nconstrain));
 
 	double* gx;
 	size_t nvarpitch;
 	cudaMallocPitch(&gx, &nvarpitch, sizeof(double) * nvar, nconstrain);
-	cudaMemcpy2D(gx, nvarpitch, dgdx, nvar * sizeof(double), sizeof(double) * nvar, nconstrain, cudaMemcpyHostToDevice);
+	cudaMemcpy2D(gx, nvarpitch, dgdx, nvar * sizeof(double), sizeof(double) * nvar, nconstrain, cudaMemcpyDeviceToDevice);
 	cuda_error_check;
 	gVector dgdx_g(gv::gVectorMap<double>(gx, nvarpitch / sizeof(double) * nconstrain));
-	
 
-	gVector low_g(nvar), upp_g(nvar);
-	low_g.set(low);
-	upp_g.set(upp);
-
-	gVector a_g(nconstrain), c_g(nconstrain), d_g(nconstrain);
-	a_g.set(a);
-	c_g.set(c);
-	d_g.set(d);
+	gVector low_g(gv::gVectorMap<double>(low, nvar)), upp_g(gv::gVectorMap<double>(upp, nvar));
+	gVector a_g(gv::gVectorMap<double>(a, nconstrain)), c_g(gv::gVectorMap<double>(c, nconstrain)), d_g(gv::gVectorMap<double>(d, nconstrain));
 
 	// ...
 
@@ -754,7 +721,7 @@ void mmasub_g(int nconstrain, int nvar,
 	Q.toMatlab("Q");
 #endif
 
-	// add PQ 
+	// add PQ
 	{
 		double* Pdata = P.data();
 		double* Qdata = Q.data();
@@ -813,7 +780,7 @@ void mmasub_g(int nconstrain, int nvar,
 	c_g.toMatlab("c");
 	d_g.toMatlab("d");
 #endif
-	
+
 	//return std::make_tuple(
 	//	std::move(x), std::move(y), std::move(z),
 	//	std::move(lam), std::move(xsi), std::move(eta),
@@ -837,14 +804,9 @@ void mmasub_g(int nconstrain, int nvar,
 	mu.toMatlab("munew");
 	s.toMatlab("snew");
 #endif
-
-	memcpy(xold2, xold1, sizeof(double) * nvar);
-	memcpy(xold1, xvar, sizeof(double) * nvar);
-	x.get(xvar, nvar);
-	low_g.get(low, nvar);
-	upp_g.get(upp, nvar);
+	cudaMemcpy(xold2, xold1, sizeof(double) * nvar, cudaMemcpyDeviceToDevice);
+	cudaMemcpy(xold1, xvar, sizeof(double) * nvar, cudaMemcpyDeviceToDevice);
+	cudaMemcpy(xvar, x.data(), sizeof(double) * nvar, cudaMemcpyDeviceToDevice);
+	cudaMemcpy(low, low_g.data(), sizeof(double) * nvar, cudaMemcpyDeviceToDevice);
+	cudaMemcpy(upp, upp_g.data(), sizeof(double) * nvar, cudaMemcpyDeviceToDevice);
 }
-
-
-
-

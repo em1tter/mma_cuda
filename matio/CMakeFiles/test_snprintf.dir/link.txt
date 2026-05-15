@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/test_snprintf.dir/test/test_snprintf.c.o CMakeFiles/test_snprintf.dir/snprintf/snprintf.c.o -o test_snprintf  -lm
